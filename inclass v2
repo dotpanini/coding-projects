@@ -1,0 +1,62 @@
+# prompt: generate an interactive racing game with track visuals
+
+import random
+import time
+
+# Track representation (you can customize this)
+track = """
+     _,-._
+    / \_/ \
+    >-(_)-<
+    \_/ \_/
+      `-'
+"""
+
+# Car representation
+car = "O"
+
+# Function to display the track with the car
+def display_track(car_position):
+    print(track[:car_position] + car + track[car_position + 1:])
+
+# Function to simulate the race
+def race(player_choice):
+    player_position = 0
+    opponent_position = 0
+    track_length = len(track)
+
+    print("Race Start!")
+    
+    while player_position < track_length - 1 and opponent_position < track_length - 1:  # Check if either player reached the end
+        display_track(player_position)
+        print(f"Opponent Position: {opponent_position}")
+        time.sleep(0.5)
+
+        # Player's turn
+        if player_choice == 'a' or player_choice == 'd':  # Basic left (a) or right (d) movement (can be improved)
+          if player_choice == 'a' and player_position > 0 :
+            player_position -= 1
+          elif player_choice == 'd' and player_position < track_length - 2:
+            player_position +=1
+        else:
+          print("Invalid key, please enter 'a' or 'd'")
+
+        # Opponent's turn (random movement)
+        opponent_move = random.choice([-1, 0, 1])  # -1, 0, or 1
+        opponent_position = max(0, min(opponent_position + opponent_move, track_length - 2)) # Ensure it stays within bounds
+        
+        print("\033[H\033[J", end="") # Clear the screen
+
+    # Determine the winner
+    if player_position >= track_length - 1:
+        print("You Win!")
+    else:
+        print("Opponent Wins!")
+
+    display_track(player_position) #Show final position
+
+# Start the game
+if __name__ == "__main__":
+    print("Welcome to the Text-Based Racing Game!")
+    player_input = input("Press 'a' for left, 'd' for right (Press any other key for no movement) and then Enter to move: ")
+    race(player_input)

@@ -1,0 +1,158 @@
+# Install necessary libraries
+!pip install ipycanvas pygame
+
+# Import libraries
+import pygame
+import random
+import ipycanvas
+import math
+from ipywidgets import Image, Output
+from io import BytesIO
+import PIL.Image
+import asyncio
+import time
+from google.colab import output as colab_output
+
+# Enable custom widget manager for ipycanvas
+colab_output.enable_custom_widget_manager()
+
+# Initialize Pygame
+pygame.init()
+
+# Screen setup
+WIDTH, HEIGHT = 500, 700
+# Initialize canvas for display
+canvas = ipycanvas.Canvas(width=WIDTH, height=HEIGHT)
+output_widget = Output()  # Create an Output widget
+
+# Display the canvas
+display(canvas)
+
+# Colors
+WHITE = (255, 255, 255)
+GRAY = (50, 50, 50)
+RED = (200, 0, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+
+# Clock and fonts
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 48)  # Use default font
+
+# Car setup
+car_width, car_height = 50, 100
+car_x = WIDTH // 2 - car_width // 2
+car_y = HEIGHT - car_height - 20
+car_speed = 5
+
+# Enemy setup
+enemy_width, enemy_height = 50, 100
+enemy_x = random.randint(50, WIDTH - enemy_width - 50)
+enemy_y = -enemy_height
+enemy_speed = 7
+
+# Score
+score = 0
+
+# Function to display the score
+def show_score(score):
+    text = font.render(f"Score: {score}", True, WHITE)
+    text_rect = text.get_rect()
+    # clear area before drawing text
+    canvas.clear_rect(10, 10, text_rect.width, text_rect.height)
+
+    # Convert the Pygame surface to a PIL image
+    pil_image = PIL.Image.frombytes(
+        "RGBA", text.get_size(), pygame.image.tostring(text, "RGBA")
+    )
+
+    # Create an ipywidgets Image from the PIL image
+    image_widget = Image(
+        value=pil_image.tobytes(),
+        format="png",
+        width=text_rect.width,
+        height=text_rect.height,
+    )
+
+    # Draw the image widget using draw_image
+    canvas.draw_image(image_widget, 10, 10)
+
+# Function to reset the enemy's position
+def reset_enemy():
+    return random.randint(50, WIDTH - enemy_width - 50), -enemy_height
+
+# Function to check for collision between car and enemy
+def is_collision(x1, y1, x2, y2):
+    return abs(x1 - x2) < car_width and abs(y1 - y2) < car_height
+
+# Main game loop
+async def game_loop():
+    global car_x, enemy_x, enemy_y, score, running
+
+    running = True
+    while running:
+        # Event handling (simulated for Jupyter)
+        await asyncio.sleep(0.01)  # Small delay to control speed
+
+        # Movement (simulated using ipycanvas events)
+        def handle_key_press(event):
+            global car_x
+            key = event['key']
+            if key == "ArrowLeft" and car_x > 0:
+                car_x -= car_speed
+            if key == "ArrowRight" and car_x < WIDTH - car_width:
+                car_x += car_speed
+
+        canvas.on_key_down(handle_key_press)
+
+        # Move enemy
+        enemy_y += enemy_speed
+        if enemy_y > HEIGHT:
+            enemy_x, enemy_y = reset_enemy()
+            score += 1
+
+        # Collision detection
+        if is_collision(car_x, car_y, enemy_x, enemy_y):
+            with output_widget:  # Use output_widget here
+                text = font.render("Game Over!", True, RED)
+                text_rect = text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
+
+                # Convert the Pygame surface to a PIL image
+                pil_image = PIL.Image.frombytes(
+                    "RGBA", text.get_size(), pygame.image.tostring(text, "RGBA")
+                )
+
+                # Create an ipywidgets Image from the PIL image
+                image_widget = Image(
+                    value=pil_image.tobytes(),
+                    format="png",
+                    width=text_rect.width,
+                    height=text_rect.height,
+                )
+
+                # Draw the image widget using draw_image
+                canvas.draw_image(image_widget, text_rect.x, text_rect.y)  # draw to canvas
+                canvas.flush()
+
+            await asyncio.sleep(2)  # Pause for 2 seconds
+            running = False  # Exit the game loop after game over
+
+        # Drawing
+        canvas.clear()
+        canvas.fill_style = "gray"
+        canvas.fill_rect(0, 0, WIDTH, HEIGHT)
+
+        # Draw car and enemy
+        canvas.fill_style = "blue"
+        canvas.fill_rect(car_x, car_y, car_width, car_height)
+
+        canvas.fill_style = "yellow"
+        canvas.fill_rect(enemy_x, enemy_y, enemy_width, enemy_height)
+
+        # Show score
+        show_score(score)
+
+        canvas.flush()  # Force immediate display update
+
+# Run the game loop using asyncio
+asyncio.create_task(game_loop())

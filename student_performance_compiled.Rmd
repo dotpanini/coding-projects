@@ -1,0 +1,796 @@
+---
+title: "ANLY506"
+author: "Chi Chen"
+date: "2025-07-21"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r cars}
+# Load libraries
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(janitor)
+
+# Load the dataset (replace with your actual path if local)
+setwd("/Users/saptaparnighosh/My Drive/ANLY 506/Group Project/")
+getwd()
+df <- read.csv("enhanced_student_habits_performance_dataset.csv")
+
+# View structure and summary
+str(df)
+summary(df)
+glimpse(df)
+
+# Clean column names
+df <- clean_names(df)
+
+# Check missing values
+colSums(is.na(df))
+
+# --- Handle Missing Data ---
+# Drop columns with >5% missing values
+missing_percent <- colSums(is.na(df)) / nrow(df)
+df <- df[, missing_percent <= 0.05]
+
+# Impute missing numeric values with mean (if MCAR assumption holds)
+df <- df %>%
+  mutate(across(where(is.numeric), ~ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+# --- Convert Variable Types ---
+# Convert character variables to factors
+df <- df %>%
+  mutate(across(where(is.character), as.factor))
+
+# Example: convert binary Yes/No columns to factor (if not already)
+df$part_time_job <- factor(df$part_time_job)
+df$access_to_tutoring <- factor(df$access_to_tutoring)
+
+# --- Optional: Convert ordinal-like columns ---
+df$family_income_range <- factor(df$family_income_range,
+                                 levels = c("Low", "Medium", "High"),
+                                 ordered = TRUE)
+
+# --- Outlier Analysis Setup (optional) ---
+# Compute Mahalanobis distance (multivariate outlier detection)
+num_vars <- df %>% select(where(is.numeric))
+cov_matrix <- cov(num_vars)
+center <- colMeans(num_vars)
+mahal_dist <- mahalanobis(num_vars, center, cov_matrix)
+
+# Flag observations with extreme distance (e.g., top 1%)
+cutoff <- quantile(mahal_dist, 0.99)
+df$outlier_flag <- mahal_dist > cutoff
+
+# View potential outliers
+df %>% filter(outlier_flag == TRUE)
+```
+
+
+```{r cars}
+str(df)
+head(df)
+```
+
+
+```{r studyhoursperday}
+# ---- Step 1: Summary Statistics ----
+summary(df$study_hours_per_day)
+sd(df$study_hours_per_day, na.rm = TRUE)  # Standard deviation
+
+# ---- Step 2: Histogram ----
+ggplot(df, aes(x = study_hours_per_day)) +
+  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
+  geom_density(aes(y = ..density.. * 0.5), color = "darkblue", size = 1) +  # scaled to match histogram
+  labs(title = "Distribution of Study Hours Per Day",
+       x = "Study Hours", y = "Frequency")
+
+# ---- Step 3: Boxplot ----
+ggplot(df, aes(y = study_hours_per_day)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Study Hours Per Day",
+       y = "Study Hours")
+```
+
+Summary Statistics:
+Count: 80,000 students
+Mean: ~4.17 hours
+Median (50%): ~4.13 hours
+Std Dev: ~2.00 hours
+Range: 0 to 12 hours
+IQR (Interquartile Range): 2.8 to 5.5 hours
+Most students study between ~3 and 5.5 hours per day, with some outliers studying much more or none at all. The histogram shows a slightly right-skewed distribution — most students study around 3–5 hours/day, with fewer students at the extremes. The boxplot confirms this pattern and highlights a few potential outliers (students studying more than ~10 hours). The variable appears usable for modeling — it's reasonably symmetric. No transformation is needed. We will retain this variable in the modeling pipeline.
+
+```{r sleephours}
+# ---- Step 1: Summary Statistics ----
+summary(df$sleep_hours)
+sd(df$sleep_hours, na.rm = TRUE)  # Standard deviation
+
+# ---- Step 2: Histogram ----
+ggplot(df, aes(x = sleep_hours)) +
+  geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") +
+  geom_density(aes(y = ..density.. * 0.5), color = "darkblue", size = 1) +
+  labs(title = "Distribution of Sleep Hours",
+       x = "Sleep Hours per Night", y = "Frequency")
+
+# ---- Step 3: Boxplot ----
+ggplot(df, aes(y = sleep_hours)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Sleep Hours",
+       y = "Sleep Hours")
+
+```
+
+Histogram Insights:
+The distribution is approximately normal, centered around 7–8 hours of sleep.
+There's slight right skew, but it’s minor and doesn’t distort the shape.
+Very few students report extreme values (<5 or >10 hours).
+Boxplot Insights:
+The interquartile range (IQR) spans roughly from 6 to 8 hours.
+Median sleep is ~7 hours.
+Mild outliers exist beyond 10 hours but are not extreme or frequent.
+This is a healthy, usable variable — it’s interpretable, well-behaved, and likely relevant to exam performance.
+
+```{r attendancepercentage}
+# ---- Step 1: Summary Statistics ----
+summary(df$attendance_percentage)
+sd(df$attendance_percentage, na.rm = TRUE)  # Standard deviation
+
+# ---- Step 2: Histogram ----
+ggplot(df, aes(x = attendance_percentage)) +
+  geom_histogram(binwidth = 2.5, fill = "skyblue", color = "black") +
+  geom_density(aes(y = ..density.. * 2.5), color = "darkblue", size = 1) +
+  labs(title = "Distribution of Attendance Percentage",
+       x = "Attendance %", y = "Frequency")
+
+# ---- Step 3: Boxplot ----
+ggplot(df, aes(y = attendance_percentage)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Attendance Percentage",
+       y = "Attendance %")
+
+```
+
+Histogram Insights:
+The distribution is fairly uniform across the range of 40% to 100%.
+There’s no strong skewness—the values are spread evenly.
+This could suggest either well-simulated or artificially structured data (e.g., in survey-style datasets).
+Boxplot Insights:
+The median attendance is around 70%.
+The interquartile range (IQR) lies approximately between 55% and 85%.
+No major outliers are flagged.
+Values below 40% appear to be excluded or absent.
+Although it’s not a normal distribution, this variable does not violate assumptions needed for most regression or classification methods. It’s a valid behavioral predictor and should definitely be kept.
+
+```{r}
+summary(df$exam_score)
+sd(df$exam_score, na.rm = TRUE)
+
+ggplot(df, aes(x = exam_score)) +
+  geom_histogram(binwidth = 2.5, fill = "skyblue", color = "black") +
+  geom_density(aes(y = ..density.. * 2.5), color = "darkblue", size = 1) +
+  labs(title = "Distribution of Exam Scores",
+       x = "Exam Score", y = "Frequency")
+
+ggplot(df, aes(y = exam_score)) +
+  geom_boxplot(fill = "orange") +
+  labs(title = "Boxplot of Exam Scores", y = "Exam Score")
+
+```
+
+1. Distribution Insights
+The histogram shows a strong right skew — many students score between 90–100, with a long tail toward lower scores.
+The boxplot confirms this: the median score is high (93), with a clear set of lower-end outliers below ~60.
+The mean (89.14) is slightly lower than the median (93), also indicating skewness.
+IQR = Q3 − Q1 = 100 − 82 = 18 → moderate spread, but mostly concentrated at the top end.
+
+2. Interpretation
+Many students are high performers (near-perfect scores), but a non-negligible minority are significantly underperforming.
+These outliers will be important for modeling — we’ll want to investigate what factors distinguish low scorers from high scorers.
+
+3. Action Plan
+Retain the variable as-is.
+Consider trying a log transformation in modeling later to reduce skewness (for assumptions of linear regression).
+These results validate the research question: uncovering what habits/traits correlate with performance gaps.
+
+```{r}
+# Load required libraries
+install.packages("DataExplorer")
+library(DataExplorer)
+
+# Optional: clean column names
+# install.packages("janitor")
+library(janitor)
+df <- clean_names(df)
+
+# Show only histograms for numeric variables
+plot_histogram(df, title = "Histograms of Numeric Variables")
+
+# Show boxplots for numeric variables grouped by the dependent variable (optional)
+# Replace "exam_score" if your target variable has a different name
+plot_boxplot(df, by = "exam_score", title = "Boxplots of Numeric Variables by Exam Score")
+
+```
+
+The following variables exhibit fairly symmetric distributions and therefore do not require log transformation. Variables such as age, attendance_percentage, exercise_frequency, motivation_level, parental_support_level, and semester are either uniformly or evenly spread across their ranges, indicating no strong skew. Variables like mental_health_rating, stress_level, and study_hours_per_day show slight skew (right or left), but the deviations are minor and unlikely to impact modeling significantly. Other variables such as screen_time and sleep_hours display a near-normal bell-shaped distribution, suggesting they are well-behaved and can be used in their original form. Finally, social_activity and time_management_score are discrete but symmetrically distributed, which also supports keeping them as-is.
+
+In contrast, several variables show strong right skew and benefit from transformation. These include netflix_hours, social_media_hours, and study_hours_per_day, which are concentrated at the low end with long tails to the right. exam_score also demonstrates extreme right skew due to a large proportion of students clustering near the maximum score. Similarly, exam_anxiety_score is heavily concentrated at the highest value of 10, which might indicate a ceiling effect. While previous_gpa is technically left-censored, it shows a visual cluster at the top of the scale, which justifies transformation for normalization. The variable student_id may appear skewed as well, but since it is an identifier and not an analytical feature, it should be dropped from modeling altogether. For those skewed variables retained, applying a transformation such as log(x + 1) or square root can help normalize the distributions and stabilize variance—provided that all values are strictly positive.
+
+When examining boxplots grouped by exam_score quantiles, several patterns emerge that reinforce the findings above. Students with higher exam scores tend to have higher previous_gpa, spend more study_hours_per_day, exhibit better time_management_score, and report lower exam_anxiety_score. Additionally, higher-performing students generally spend less time on screen_time, social_media_hours, and netflix_hours, suggesting a potential negative relationship between these variables and academic performance. Positive predictors of exam score also include motivation_level, parental_support_level, and mental_health_rating, which trend upward in alignment with higher exam performance.
+
+```{r}
+# Vector of variables to log-transform
+vars_to_log <- c("netflix_hours", "social_media_hours", "previous_gpa", 
+                 "study_hours_per_day", "exam_anxiety_score")
+
+# Apply log1p and save as new columns with "_log" suffix
+for (var in vars_to_log) {
+  new_var <- paste0(var, "_log")
+  df[[new_var]] <- log1p(df[[var]])
+}
+
+# List of variables you transformed
+vars_log <- c("netflix_hours_log", "social_media_hours_log", 
+              "previous_gpa_log", "study_hours_per_day_log", 
+              "exam_anxiety_score_log")
+
+# Plot histograms
+library(DataExplorer)
+plot_histogram(df[, vars_log])
+
+```
+After reviewing the histograms of the log-transformed variables, we can interpret the results and make decisions about which variables to keep in their transformed form. The log transformation of netflix_hours, social_media_hours, and study_hours_per_day was successful in reducing skewness and making the distributions more symmetrical and suitable for modeling; these transformed variables should be retained. In contrast, exam_anxiety_score_log remains highly left-skewed even after transformation, likely due to a ceiling effect where many participants rated their anxiety at the maximum value of 10. Since the transformation didn’t improve the distribution meaningfully, it may be better to retain the original version or consider binning it into categorical levels (e.g., low, medium, high anxiety). Similarly, previous_gpa_log still shows a compressed left-skewed pattern post-transformation, suggesting the log transformation did not add interpretive value. Because many students may cluster at the maximum GPA of 4.0, this variable may offer limited variance and could either be kept in its raw form or dropped entirely, depending on its predictive power in multivariate analysis. Overall, we should move forward with the log-transformed versions of the hour-based variables, revisit the raw or categorized forms of exam anxiety, and assess whether previous_gpa contributes meaningfully before deciding to exclude it.
+
+```{r}
+# Frequency table for one variable
+table(df$gender)
+categorical_vars <- c("gender", "major", "part_time_job", 
+                      "diet_quality", "parental_education_level", 
+                      "internet_quality", "extracurricular_participation", 
+                      "dropout_risk", "study_environment", 
+                      "access_to_tutoring", "family_income_range", 
+                      "learning_style")
+
+# Frequency tables for all categorical variables
+lapply(df[categorical_vars], table)
+```
+We conducted a univariate exploratory analysis of all categorical variables in the dataset to examine the distribution of values within each category and assess their suitability for downstream modeling. Most variables displayed balanced or near-balanced distributions, suggesting they are appropriate to retain without any transformation. For instance, gender is evenly distributed across Female, Male, and Other categories, each comprising roughly one-third of the sample. Similarly, the major variable includes six academic disciplines—such as Business, Arts, Psychology, and Engineering—each with comparable sample sizes of around 13,000 students, indicating no overrepresentation.
+
+Other well-distributed variables include diet_quality, parental_education_level, internet_quality, and study_environment, all of which show fairly even splits across their respective categories. Additionally, learning_style, with four modes—Auditory, Kinesthetic, Reading, and Visual—is well balanced, with each group representing roughly one-quarter of the dataset. These variables are retained for further analysis without modification.
+
+A few variables, such as part_time_job, access_to_tutoring, and extracurricular_participation, are slightly imbalanced, with each “Yes/No” category holding around 40,000 cases. Although there is some discrepancy, the differences are minor and should not pose significant issues in interpretation or modeling. These variables are also suitable for inclusion.
+
+However, dropout_risk presents a clear case of extreme imbalance. Approximately 98% of students are labeled as “No” for dropout risk, with only about 2% marked as “Yes.” Due to this heavy skew, this variable offers limited interpretive power and may introduce modeling bias. It may be dropped from the analysis unless special techniques, such as resampling or stratification, are applied.
+
+Overall, the categorical variables in this dataset are well-structured and appropriate for inclusion in both exploratory and inferential analysis, with the exception of dropout_risk, which warrants caution due to its significant imbalance.
+
+```{r}
+# Load required package
+library(ggplot2)
+
+# List of categorical variables (from your dataset)
+categorical_vars <- c("gender", "major", "part_time_job", 
+                      "diet_quality", "parental_education_level", 
+                      "internet_quality", "extracurricular_participation", 
+                      "dropout_risk", "study_environment", 
+                      "access_to_tutoring", "family_income_range", 
+                      "learning_style")
+
+# Loop through each variable and generate bar plot
+for (var in categorical_vars) {
+  print(
+    ggplot(df, aes_string(x = var)) +
+      geom_bar(fill = "steelblue") +
+      labs(title = paste("Distribution of", var),
+           x = var,
+           y = "Count") +
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 30, hjust = 1))  # rotate x-axis labels if long
+  )
+}
+
+```
+
+Overall, the categorical variables in the dataset are well-balanced and diverse, with most having equally distributed categories (e.g., gender, major, learning style). This provides a strong foundation for fair analysis without severe imbalance issues.
+
+The only major imbalance is found in the dropout_risk variable, where almost all students are labeled No. While this variable could still offer insight for dropout prediction or early intervention models, statistical techniques like SMOTE (Synthetic Minority Oversampling Technique) may be required to handle its imbalance in modeling.
+
+This categorical overview confirms the dataset’s readiness for further bivariate and modeling analysis across demographics, behavioral factors, and outcomes. Let me know if you’d like help creating grouped bar plots (e.g., dropout risk by gender or income)!
+```{r}
+library(tidyverse)
+
+# List of your categorical variables
+categorical_vars <- c("gender", "major", "part_time_job", "diet_quality", 
+                      "parental_education_level", "internet_quality", 
+                      "extracurricular_participation", "dropout_risk", 
+                      "study_environment", "access_to_tutoring", 
+                      "family_income_range", "learning_style")
+
+# Convert all to character so they can be pivoted safely
+df[categorical_vars] <- df[categorical_vars] %>%
+  mutate(across(everything(), as.character))
+
+# Pivot to long format
+df_long <- df %>%
+  pivot_longer(cols = all_of(categorical_vars),
+               names_to = "variable",
+               values_to = "value")
+ggplot(df_long, aes(x = value)) +
+  geom_bar(fill = "#69b3a2") +
+  facet_wrap(~ variable, scales = "free_x") +
+  theme_minimal() +
+  labs(title = "Bar Plots of Categorical Variables",
+       x = NULL, y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.text = element_text(face = "bold"))
+
+
+```
+
+
+#Multivariate Exploratory Data Analysis 
+
+```{r}
+
+library(readxl)
+library(ggplot2)
+library(GGally)
+library(dplyr)
+library(corrplot)
+
+df2 <- read.csv("enhanced_student_habits_performance_dataset.csv")
+head(df2)
+summary(df2)
+str(df2)
+
+num_vars <- df2 %>%
+  select(where(is.numeric))  # Select numeric columns only
+
+str(num_vars)
+
+cor_matrix <- cor(num_vars, use = "complete.obs")
+corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8)
+
+cor_matrix
+#ggpairs(df2)
+selected_vars <- df2[, c("study_hours_per_day", "sleep_hours", "previous_gpa", "exam_score", "stress_level")]
+# Customize dot size (e.g., size = 0.8)
+ggpairs(df2,
+        upper = list(continuous = wrap("points", size = 0.5)),
+        lower = list(continuous = wrap("points", size = 0.5)),
+        diag = list(continuous = wrap("densityDiag")))
+
+ggplot(df2, aes(x = dropout_risk, y = exam_score)) +
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal()
+ggplot(df2, aes(x = learning_style, y = exam_score, fill = learning_style)) +
+  geom_violin(trim = FALSE) +
+  geom_jitter(alpha = 0.2, width = 0.2) +
+  theme_minimal()
+
+# Scale numeric variables
+scaled_data <- scale(na.omit(num_vars))
+
+# k-means clustering
+set.seed(123)
+kmeans_result <- kmeans(scaled_data, centers = 3)
+df2$cluster <- as.factor(kmeans_result$cluster)
+
+# Plot clusters
+ggplot(df2, aes(x = study_hours_per_day, y = exam_score, color = cluster)) +
+  geom_point(alpha = 0.6) +
+  theme_minimal()
+
+model <- lm(exam_score ~ study_hours_per_day + sleep_hours + diet_quality + dropout_risk + learning_style, data = df2)
+summary(model)
+
+categorical_vars <- c(
+  "gender", "major", "part_time_job", "diet_quality",
+  "parental_education_level", "internet_quality",
+  "extracurricular_participation", "dropout_risk",
+  "study_environment", "access_to_tutoring",
+  "family_income_range", "learning_style")
+
+continuous_vars <- c(
+  "age", "study_hours_per_day", "social_media_hours", "netflix_hours",
+  "attendance_percentage", "sleep_hours", "exercise_frequency",
+  "mental_health_rating", "previous_gpa", "stress_level",
+  "social_activity", "screen_time", "time_management_score", "exam_score"
+)
+
+# Store top N most significant results
+results <- data.frame(Categorical = character(), Continuous = character(), Test = character(), P_Value = numeric(), stringsAsFactors = FALSE)
+
+# Loop through combinations and calculate p-values
+for (cat in categorical_vars) {
+  for (cont in continuous_vars) {
+    data_pair <- df2[, c(cat, cont)]
+    data_pair <- na.omit(data_pair)
+    
+    if (length(unique(data_pair[[cat]])) < 2) next
+    
+    if (length(unique(data_pair[[cat]])) == 2) {
+      test <- t.test(data_pair[[cont]] ~ data_pair[[cat]])
+      pval <- test$p.value
+      method <- "t-test"
+    } else {
+      model <- aov(data_pair[[cont]] ~ as.factor(data_pair[[cat]]))
+      pval <- summary(model)[[1]][["Pr(>F)"]][1]
+      method <- "ANOVA"
+    }
+    
+    results <- rbind(results, data.frame(
+      Categorical = cat,
+      Continuous = cont,
+      Test = method,
+      P_Value = round(pval, 4)
+    ))
+  }
+}
+
+# Sort and select top 10 most significant relationships
+top_results <- results %>% arrange(P_Value) %>% head(10)
+top_results
+
+# Generate boxplots for each top pair
+for (i in 1:nrow(top_results)) {
+  cat_var <- top_results$Categorical[i]
+  cont_var <- top_results$Continuous[i]
+  title <- paste("Boxplot of", cont_var, "by", cat_var, "\n(p =", top_results$P_Value[i], ")")
+  
+  p <- ggplot(df2, aes_string(x = cat_var, y = cont_var)) +
+    geom_boxplot(fill = "lightblue") +
+    labs(title = title, x = cat_var, y = cont_var) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+}
+```
+#Linear Regression 
+
+
+```{r}
+library(tidyverse) # For data manipulation and visualization (dplyr, ggplot2)
+library(caret) # For dummy variable creation
+library(corrplot) # For correlation matrix
+
+# --- 1. Load the data ---
+tryCatch({
+  student_data <- read_csv("enhanced_student_habits_performance_dataset.csv")
+  message("Data loaded successfully.")
+}, error = function(e) {
+  stop(paste("Error loading data:", e$message, "Please ensure 'enhanced_student_habits_performance_dataset.csv' is accessible."))
+})
+
+# --- 2. Data Cleaning and Preparation ---
+# Rename columns for easier use
+student_data <- student_data %>%
+  rename(
+    study_hours = study_hours_per_day,
+    social_media = social_media_hours,
+    netflix_hours = netflix_hours,
+    part_time_job_status = part_time_job,
+    attendance = attendance_percentage,
+    sleep_hours = sleep_hours,
+    diet_quality = diet_quality,
+    exercise_freq = exercise_frequency,
+    parental_edu = parental_education_level,
+    internet_quality = internet_quality,
+    mental_health = mental_health_rating,
+    extracurricular = extracurricular_participation,
+    prev_gpa = previous_gpa,
+    stress_level = stress_level,
+    dropout_risk = dropout_risk,
+    social_activity = social_activity,
+    screen_time = screen_time,
+    study_env = study_environment,
+    tutoring_access = access_to_tutoring,
+    family_income = family_income_range,
+    parental_support = parental_support_level,
+    motivation = motivation_level,
+    exam_anxiety = exam_anxiety_score,
+    learning_style = learning_style,
+    time_management = time_management_score,
+    exam_score = exam_score
+  )
+
+# Identify characteristic variables that are categorical
+categorical_vars <- c(
+  "gender", "major", "part_time_job_status", "diet_quality",
+  "exercise_freq", "parental_edu", "internet_quality",
+  "extracurricular", "dropout_risk", "study_env",
+  "tutoring_access", "family_income", "learning_style"
+)
+
+for (col in categorical_vars) {
+  if (col %in% names(student_data)) {
+    student_data[[col]] <- as.factor(student_data[[col]])
+  }
+}
+
+# Ensure numerical columns are indeed numeric
+numerical_vars <- c(
+  "age", "study_hours", "social_media", "netflix_hours",
+  "attendance", "sleep_hours", "mental_health", "prev_gpa",
+  "semester", "stress_level", "social_activity", "screen_time",
+  "parental_support", "motivation", "exam_anxiety",
+  "time_management", "exam_score"
+)
+
+for (col in numerical_vars) {
+  if (col %in% names(student_data)) {
+    student_data[[col]] <- as.numeric(student_data[[col]])
+  }
+}
+
+# Handle missing values: remove rows with any missing values.
+student_data_clean <- na.omit(student_data)
+message(paste("Original rows:", nrow(student_data), ", Rows after removing NAs:", nrow(student_data_clean)))
+
+# --- 3. Create Dummy Variables ---
+# (excluding exam_score and student_id).
+# The `fullRank = TRUE` argument ensures one level per factor is dropped to avoid multicollinearity.
+dummy_model <- dummyVars(~ . - exam_score - student_id, data = student_data_clean, fullRank = TRUE)
+dummy_data <- data.frame(predict(dummy_model, newdata = student_data_clean))
+
+# Combine the processed predictor variables (from dummy_data) with the target variable (exam_score).
+final_data <- cbind(dummy_data, exam_score = student_data_clean$exam_score)
+
+# --- 4. Abundant Visualizations ---
+
+# Set a consistent theme for ggplot2
+theme_set(theme_minimal() + theme(plot.title = element_text(hjust = 0.5, face = "bold")))
+
+# Histogram of Exam Score
+ggplot(student_data_clean, aes(x = exam_score)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Distribution of Exam Scores", x = "Exam Score", y = "Number of Students") +
+  theme(text = element_text(size = 12))
+
+# Scatter plot: Study Hours vs. Exam Score
+ggplot(student_data_clean, aes(x = study_hours, y = exam_score)) +
+  geom_point(alpha = 0.6, color = "darkblue") +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Study Hours vs. Exam Score", x = "Study Hours Per Day", y = "Exam Score") +
+  theme(text = element_text(size = 12))
+
+# Scatter plot: Previous GPA vs. Exam Score
+ggplot(student_data_clean, aes(x = prev_gpa, y = exam_score)) +
+  geom_point(alpha = 0.6, color = "darkblue") +
+  geom_smooth(method = "lm", col = "red") +
+  labs(title = "Previous GPA vs. Exam Score", x = "Previous GPA", y = "Exam Score") +
+  theme(text = element_text(size = 12))
+
+# Box plot: Gender vs. Exam Score
+ggplot(student_data_clean, aes(x = gender, y = exam_score, fill = gender)) +
+  geom_boxplot() +
+  labs(title = "Exam Score by Gender", x = "Gender", y = "Exam Score") +
+  theme(legend.position = "none", text = element_text(size = 12))
+
+# Box plot: Diet Quality vs. Exam Score
+ggplot(student_data_clean, aes(x = diet_quality, y = exam_score, fill = diet_quality)) +
+  geom_boxplot() +
+  labs(title = "Exam Score by Diet Quality", x = "Diet Quality", y = "Exam Score") +
+  theme(legend.position = "none", text = element_text(size = 12))
+
+# Box plot: Parental Education Level vs. Exam Score
+ggplot(student_data_clean, aes(x = parental_edu, y = exam_score, fill = parental_edu)) +
+  geom_boxplot() +
+  labs(title = "Exam Score by Parental Education Level", x = "Parental Education Level", y = "Exam Score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none", text = element_text(size = 12))
+
+# Box plot: Learning Style vs. Exam Score
+ggplot(student_data_clean, aes(x = learning_style, y = exam_score, fill = learning_style)) +
+  geom_boxplot() +
+  labs(title = "Exam Score by Learning Style", x = "Learning Style", y = "Exam Score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), legend.position = "none", text = element_text(size = 12))
+
+# Correlation matrix for numerical variables (subset for clarity)
+# Select only numeric columns for correlation from the clean data before dummy creation
+numeric_cols_for_corr <- student_data_clean %>%
+  select(all_of(numerical_vars)) %>%
+  select(-exam_score) # Exclude exam_score for correlation with other predictors
+
+# Calculate correlation matrix
+correlation_matrix <- cor(numeric_cols_for_corr, use = "pairwise.complete.obs") # Handles NAs if any still exist
+
+# Visualize correlation matrix
+corrplot(correlation_matrix, method = "circle", type = "upper", tl.col = "black", tl.srt = 45)
+
+# For a simple base R plot
+message("\nGenerating correlation plot for numerical variables.")
+pairs(student_data_clean %>% select(exam_score, study_hours, prev_gpa, sleep_hours, social_media),
+      main = "Scatterplot Matrix of Key Numerical Variables", col = "darkblue")
+
+
+# --- 5. Build the Linear Regression Model ---
+# The formula `exam_score ~ .` means 'exam_score' is predicted by all other variables in 'final_data'.
+tryCatch({
+  model <- lm(exam_score ~ ., data = final_data)
+  message("Linear regression model built successfully.")
+}, error = function(e) {
+  stop(paste("Error building linear regression model:", e$message, "This might be due to issues like multicollinearity or insufficient data."))
+})
+
+
+# --- 6. Model Diagnostics Plots ---
+if (!is.null(model)) {
+  message("\nGenerating model diagnostic plots.")
+  plot(model)
+} else {
+  message("Model not built, skipping diagnostic plots.")
+}
+
+
+# --- 7. Model Summary and Interpretation ---
+# Only get summary if the model was successfully built
+if (!is.null(model)) {
+  model_summary <- summary(model)
+  print(model_summary)
+  
+  # --- 8. Extract and present key findings ---
+  # R-squared value
+  r_squared <- model_summary$r.squared
+  # Corrected typo: changed adj_r_squared to adj.r.squared
+  adj_r_squared <- model_summary$adj.r.squared
+  
+  # Significant coefficients (p-value < 0.05)
+  significant_coeffs <- as.data.frame(model_summary$coefficients) %>%
+    rownames_to_column(var = "Variable") %>%
+    filter(`Pr(>|t|)` < 0.05) %>%
+    arrange(`Pr(>|t|)`)
+  
+  message("\n--- Model Results Summary ---")
+  message(paste("R-squared:", round(r_squared, 5)))
+  message(paste("Adjusted R-squared:", round(adj_r_squared, 5)))
+  message("\nSignificant Predictors (p < 0.05):")
+  print(significant_coeffs)
+  
+} else {
+  message("Model summary and key findings skipped because the model could not be built.")
+}
+
+# --- 9. Single Model Refinement Step ---
+
+calculate_metrics <- function(model) {
+  if (is.null(model)) return(NULL)
+  
+  summ <- summary(model)
+  metrics <- data.frame(
+    R_squared = summ$r.squared,
+    Adj_R_squared = summ$adj.r.squared,
+    AIC = AIC(model),
+    BIC = BIC(model),
+    Num_Predictors = length(coef(model)) - 1  # Subtract 1 for intercept
+  )
+  return(metrics)
+}
+refine_model_pvalue <- function(model, data, p_threshold = 0.5) {
+  # Get summary and coefficients
+  model_summary <- summary(model)
+  coeff_table <- as.data.frame(model_summary$coefficients) %>%
+    rownames_to_column(var = "variable") %>%
+    rename(p_value = `Pr(>|t|)`)
+  
+  # Identify variables to remove (p-value > threshold)
+  to_remove <- coeff_table %>%
+    filter(p_value > p_threshold) %>%
+    pull(variable)
+  
+  # Remove intercept from removal candidates
+  to_remove <- setdiff(to_remove, "(Intercept)")
+  
+  if (length(to_remove) == 0) {
+    message("\nNo variables meet removal criteria (p > ", p_threshold, ")")
+    return(model)
+  }
+  
+  message("\nVariables being removed (p-value > ", p_threshold, "):")
+  print(to_remove)
+  
+  # Create new formula by removing non-significant variables
+  current_formula <- formula(model)
+  new_formula <- update(current_formula, paste(". ~ . -", paste(to_remove, collapse = " - ")))
+  
+  # Refit model
+  new_model <- lm(new_formula, data = data)
+  
+  return(new_model)
+}
+
+# --- Perform Single Refinement ---
+message("\n=== Performing Single Model Refinement (p > 0.5) ===")
+refined_model <- refine_model_pvalue(model, final_data, p_threshold = 0.5)
+
+# --- Model Comparison ---
+message("\n=== Model Comparison ===")
+
+# Calculate metrics for both models
+metrics <- list(
+  "Full Model" = calculate_metrics(model),
+  "Refined Model" = calculate_metrics(refined_model)
+)
+
+# Create comparison table
+metrics_comparison <- bind_rows(metrics, .id = "Model") %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+print(metrics_comparison)
+
+# ANOVA comparison
+message("\nANOVA Comparison:")
+print(anova(model, refined_model))
+
+# --- Final Refined Model Summary ---
+message("\n=== Final Refined Model Summary ===")
+final_summary <- summary(refined_model)
+print(final_summary)
+```
+
+# Random Forest
+
+```{r}
+# Load data
+data <- read.csv("enhanced_student_habits_performance_dataset.csv")
+
+# Assign correct data type to each variable
+data$gender <- as.factor(data$gender)
+data$major <- as.factor(data$major)
+data$part_time_job <- as.factor(data$part_time_job)
+data$diet_quality <- as.factor(data$diet_quality)
+data$parental_education_level <- as.factor(data$parental_education_level)
+data$internet_quality <- as.factor(data$internet_quality)
+data$extracurricular_participation <- as.factor(data$extracurricular_participation)
+data$dropout_risk <- as.factor(data$dropout_risk)
+data$study_environment <- as.factor(data$study_environment)
+data$access_to_tutoring <- as.factor(data$access_to_tutoring)
+data$family_income_range <- as.factor(data$family_income_range)
+data$learning_style <- as.factor(data$learning_style)
+summary(data)
+
+# Removed unused columns
+data_clean <- subset(data, select = -c(student_id, previous_gpa))
+
+# Fit the random forest model
+library(ranger)
+model = ranger(formula = exam_score ~ ., data = data_clean, mtry = floor(28 / 3), num.trees = 1000, 
+               importance = "impurity", seed = 324762, num.threads = parallel::detectCores())
+model
+
+# Plot the variable importance plot
+library(ggplot2)
+importance_df <- data.frame(Variable = names(model$variable.importance), Importance = model$variable.importance)
+importance_df <- importance_df[order(importance_df$Importance, decreasing = TRUE), ]
+ggplot(importance_df, aes(x = reorder(Variable, Importance), y = Importance)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs(title = "Variable Importance", x = "Predictor", y = "Importance Score")
+
+# Plot the partial dependence plots
+library(pdp)
+set.seed(324762)
+subset_data <- data_clean[sample(nrow(data_clean), 5000), ]  # select 5000 data points to speed up the runs
+partial_plot <- partial(model, pred.var = "study_hours_per_day", train = subset_data)
+plot(partial_plot, main = "Partial Dependence of Exam Score on Study Hours",
+     xlab = "Study Hours Per Day", ylab = "Predicted Exam Score")
+partial_plot2 <- partial(model, pred.var = "stress_level", train = subset_data)
+plot(partial_plot2, main = "Partial Dependence of Exam Score on Stress Level",
+     xlab = "Stress Level", ylab = "Predicted Exam Score")
+partial_plot3 <- partial(model, pred.var = "screen_time", train = subset_data)
+plot(partial_plot3, main = "Partial Dependence of Exam Score on Screen Time",
+     xlab = "Screen Time", ylab = "Predicted Exam Score")
+```
+
+

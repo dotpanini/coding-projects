@@ -1,6 +1,6 @@
 ---
 title: "ANLY506"
-author: "Chi Chen"
+author: "Group 1"
 date: "2025-07-21"
 output:
   word_document: default
